@@ -1,3 +1,4 @@
+#include "kernel.h"
 #include "string.h"
 #include "common.h"
 
