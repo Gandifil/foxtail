@@ -102,10 +102,15 @@ void handle_trap(struct trap_frame *f) {
 
 extern char __kernel_base[];
 extern char __free_ram[], __free_ram_end[];
+extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
 struct process procs[PROCS_MAX]; // Все блоки управления процессами.
 
-struct process *create_process(uint32_t pc) {
+void user_entry(void) {
+    PANIC("not yet implemented");
+}
+
+struct process *create_process(const void *image, size_t image_size) {
     // Поиск блока управления неиспользуемого процесса. 
     struct process *proc = NULL;
     int i;
@@ -133,13 +138,27 @@ struct process *create_process(uint32_t pc) {
     *--sp = 0;                      // s2
     *--sp = 0;                      // s1
     *--sp = 0;                      // s0
-    *--sp = (uint32_t) pc;          // ra
+    *--sp = (uint32_t) user_entry;          // ra
 
     // Отображение в страницы памяти ядра.
     uint32_t *page_table = (uint32_t *) alloc_pages(1);
     for (paddr_t paddr = (paddr_t) __kernel_base;
          paddr < (paddr_t) __free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
+
+    // Отображение страниц памяти пространства пользователя.
+    for (uint32_t off = 0; off < image_size; off += PAGE_SIZE) {
+        paddr_t page = alloc_pages(1);
+
+        // Обработка случая, в котором копируемые данные меньше размера страницы.
+        size_t remaining = image_size - off;
+        size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
+
+        // Заполнение и отображение страницы.
+        memcpy((void *) page, image + off, copy_size);
+        map_page(page_table, USER_BASE + off, page,
+                    PAGE_U | PAGE_R | PAGE_W | PAGE_X);
+    }
 
     // Инициализация полей.
     proc->pid = i + 1;
@@ -255,19 +274,17 @@ void proc_b_entry(void) {
 
 void kernel_main(void) {
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
-    paddr_t paddr0 = alloc_pages(2);
-    paddr_t paddr1 = alloc_pages(1);
-    printf("alloc_pages test: paddr0=%x\n", paddr0);
-    printf("alloc_pages test: paddr1=%x\n", paddr1);
+
+    printf("\n\n");
 
     WRITE_CSR(stvec, (uint32_t) kernel_entry); 
 
-    idle_proc = create_process((uint32_t) NULL);
+    idle_proc = create_process(NULL, 0);
     idle_proc->pid = -1; // Бездействует.
     current_proc = idle_proc;
 
-    proc_a = create_process((uint32_t) proc_a_entry);
-    proc_b = create_process((uint32_t) proc_b_entry);
+    // добавлено!
+    create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
 
     yield();
     PANIC("switched to idle process");
