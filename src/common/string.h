@@ -1,9 +1,6 @@
-#pragma once 
-#include "sbi.h"
+#pragma once
 
-inline void putchar(char ch) {
-    sbi_call1(ch, SBI_CONSOLE_PUTCHAR);
-}
+void putchar(char ch);
 
 void printf(const char *fmt, ...);
 char *strcpy(char *dst, const char *src);
