@@ -21,3 +21,8 @@ struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, lo
 void putchar(char ch) {
     sbi_call1(ch, SBI_CONSOLE_PUTCHAR);
 }
+
+long getchar(void) {
+    struct sbiret ret = sbi_call0(SBI_CONSOLE_GETCHAR);
+    return ret.error;
+}
